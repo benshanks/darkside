@@ -1,3 +1,6 @@
+//Plots a forbidden beta spectrum
+//B. Shanks, 9/25/14
+
 #include <TROOT.h>
 #include <TStyle.h>
 #include "TF1.h"
