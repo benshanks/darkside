@@ -14,6 +14,9 @@ static const double pi = TMath::Pi();
 //Math helpers
 //------------------------------------------------------------------
 
+
+//root apparently doesn't have any implementation of gamma for complex numbers.  Here are a few numerical implementations I had lying around.
+
 TComplex ComplexLnGammaLanczos(const TComplex& z)
 {
     static double lanczos_7_c[9] = {
@@ -155,9 +158,9 @@ double LogAbsComplexGamma(double zr, double zi)
 
 double Fermi(double E, double Z, double A)
 {
+    //uses log gamma
+    
     if(E <= 0.) return 0.;
-    // Z = positive for electrons, negative for positrons
-    //if(E <= 50.*eV) E = 50.*eV;
     double alphaZ = Z*fine_structure_const;
     double w = E/electron_mass_c2 + 1.;
     double p = sqrt(w*w-1.);
@@ -168,9 +171,24 @@ double Fermi(double E, double Z, double A)
     return norm*pow(2.*p*r, 2.*k-2.)*exp(pi*n + 2.*log(AbsComplexGamma(k,n)));
 }
 
+double FermiBKF(double E, double Z, double A)
+{
+    //uses normal gamma (BKF)
+    
+    if(E <= 0.) return 0.;
+    double alphaZ = Z*fine_structure_const;
+    double w = E/electron_mass_c2 + 1.;
+    double p = sqrt(w*w-1.);
+    double n = alphaZ*w/p;
+    double k = sqrt(1.-alphaZ*alphaZ);
+    double r = 0.426*fine_structure_const*pow(A,1./3.);
+    double norm = 2.*(1.+k)/pow(TMath::Gamma(1.+2.*k), 2);
+    return norm*pow(2.*p*r, 2.*k-2.)*exp(pi*n)* pow(AbsComplexGamma(k,n),2);
+}
+
 double BetaSpec(double E, double Z, double A, double Q){
     //without forbiddenness correction
-    return Fermi(E,Z,A) * pow((Q - E), 2.) * (E + electron_mass_c2) * sqrt(E + 2.*electron_mass_c2*E);
+    return Fermi(E,Z,A) * pow((Q - E), 2.) * (E + electron_mass_c2) * sqrt(E*E + 2.*electron_mass_c2*E);
 }
 
 double BetaSpec(double* E, double* Z, double* A, double* Q){
@@ -192,3 +210,5 @@ double ForbiddenBetaSpec(double* E, double* Z, double* A, double* Q){
     //Use the forbiddenness correction
     return ForbiddenBetaSpec(*E, *Z, *A, *Q);
 }
+
+
