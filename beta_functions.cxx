@@ -381,9 +381,9 @@ double Kr83Peak(double* x, double* p){
     double KrCentroid = p[1];
     double KrSigma = p[2];
     
-    if (PE < 200 || PE > 450){
-        return 0;
-    }
+//    if (PE < 200 || PE > 500){
+//        return 0;
+//    }
     
     return KrAmp*TMath::Gaus(PE,KrCentroid,KrSigma, 1);
     
