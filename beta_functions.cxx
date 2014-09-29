@@ -2,13 +2,24 @@
 // B. Shanks, 9/25/14
 
 #include "TComplex.h"
-#include <cmath>
+#include <math.h>
 #include "TMath.h"
+#include "TF1.h"
+#include "Math/GSLIntegrator.h"
+#include "Math/WrappedTF1.h"
+
+
+
 
 //copying some units from CLHEP in case this code is reused by someone without CLHEP
 static const double fine_structure_const = 1/137.035989;
 static const double electron_mass_c2 = 0.511;
 static const double pi = TMath::Pi();
+
+//don't ask.
+double fitMin = 200;
+double fitMax = 5000;
+
 
 //------------------------------------------------------------------
 //Math helpers
@@ -188,17 +199,20 @@ double FermiBKF(double E, double Z, double A)
 
 double BetaSpec(double E, double Z, double A, double Q){
     //without forbiddenness correction
+    if(E < 0 || E > Q) return 0;
+    
     return Fermi(E,Z,A) * pow((Q - E), 2.) * (E + electron_mass_c2) * sqrt(E*E + 2.*electron_mass_c2*E);
 }
 
 double BetaSpec(double* E, double* Z, double* A, double* Q){
     //without forbiddenness correction
+    
     return BetaSpec(*E, *Z, *A, *Q);
 }
 
 double ForbiddenBetaSpec(double E, double Z, double A, double Q){
-    //without forbiddenness correction
-    //absorb a and b into overall fit, if a==b, OK to set both to 1
+    //Use the forbiddenness correction
+    //if a==b, absorb a and b into overall fit, OK to set both to 1 here
     double a = 1;
     double b = 1;
     
@@ -211,4 +225,198 @@ double ForbiddenBetaSpec(double* E, double* Z, double* A, double* Q){
     return ForbiddenBetaSpec(*E, *Z, *A, *Q);
 }
 
+double ForbiddenBetaSpecPEPdf(double PE, double Z, double A, double Q, double N, double LY){
+    double E = PE /LY;
+    
+    return 1.*ForbiddenBetaSpec(E,Z,A,Q);
+}
+
+
+double ForbiddenBetaSpecPEPdf(double* x, double* p){
+    //in PE here.
+    double PE = x[0]; //returns in PHOTOELECTRONS
+    
+    
+    double Z = p[0];
+    double A = p[1];
+    double Q = p[2];
+    double N = p[3]; //changes normalization
+    double LY = p[4]; //light yield parameter
+    
+    double E = PE /LY;
+    
+    return N*ForbiddenBetaSpec(E,Z,A,Q);
+}
+
+double GaussResSig( double *x, double *p )
+{
+    double PE = x[0];
+    
+    double sig0 = p[0];
+    double sig1 = p[1];
+    double sig2 = p[2];
+    
+   return sqrt(sig0*sig0 + (1+sig1*sig1)*TMath::Max(PE, 0.)  + sig2*sig2*pow(TMath::Max(PE, 0.),2));
+}
+
+
+//double GaussRes( double *x, double *p )
+//{
+//    double PE = x[0];
+//    
+//    double sig0 = p[0];
+//    double sig1 = p[1];
+//    double sig2 = p[2];
+//    
+//    fGaussResSig->SetParameter(0, sig0);
+//    fGaussResSig->SetParameter(1, sig1);
+//    fGaussResSig->SetParameter(2, sig2);
+//    
+//    double sig = fGaussResSig->Eval(PE);
+//    
+//    return 1/sqrt(2.*pi) / sig * exp(-0.5*( pow(PE/sig),2)) );
+//}
+
+
+double GaussTimesBeta( double *x, double *p )
+{
+    double PE = p[0]; //this is the PE you're evaluating at
+    
+    double Z = p[1];
+    double A = p[2];
+    double Q = p[3];
+    double N = p[4]; //overall amplitude
+    double LY = p[5]; //light yield (assume constant)
+    
+    double t = x[0]; //integration variable
+    
+    double sig = p[6];
+    
+    return ForbiddenBetaSpecPEPdf(t, Z,A,Q,N,LY) * TMath::Gaus(PE,t, sig, 1);
+}
+
+double BetaSpecPdfRes(double* x, double* p)
+{
+    double PE = x[0]; //returns in PHOTOELECTRONS
+    
+    double Z = p[0];
+    double A = p[1];
+    double Q = p[2];
+    
+    double N = p[3]; //overall amplitude
+    double LY = p[4]; //light yield (assume constant)
+    
+    double sig0 = p[5];
+    double sig1 = p[6];
+    double sig2 = p[7];
+    
+    //resolution function
+    double sig = sqrt(sig0*sig0 + (1+sig1*sig1)*TMath::Max(PE, 0.)  + sig2*sig2*pow(TMath::Max(PE, 0.),2));
+    
+    Double_t nSig = 3.; //number of sigma to convolve in
+    Double_t xlow = PE - nSig*sig;
+    Double_t xupp = PE + nSig*sig;
+    
+    //deprecated rough integration function
+
+//    Double_t np = 50.; //number of convolution steps
+//    Double_t step = (xupp-xlow) / np;
+//    
+//    Double_t sum = 0.0;
+//    Double_t xx;
+//    
+//    Double_t fBeta = 0.0;
+//    
+//    for(Double_t i=1.0; i<=np/2; i++) {
+//        xx = xlow + (i-.5) * step;
+//        fBeta = ForbiddenBetaSpecPEPdf(xx, Z,A,Q,N,LY);
+//        sum += fBeta * TMath::Gaus(x[0],xx,sig, 1);
+//        
+//        xx = xupp - (i-.5) * step;
+//        fBeta = ForbiddenBetaSpecPEPdf(xx, Z,A,Q,N,LY);
+//        sum += fBeta * TMath::Gaus(x[0],xx,sig,1);
+//    }
+//    
+//    Double_t invsq2pi = 0.3989422804014;   // (2 pi)^(-1/2)
+//    
+//    return N*(step * sum * invsq2pi / sig);
+    
+//    
+//    
+//    fGaussRes->SetRange(PE-5*sig,PE+5*sig);
+//    fForbBetaSpecPE->SetRange(0, Q*LY);
+//    fGaussTimesBeta->SetRange(0,Q*LY);
+//
+//    //return fGaussTimesBeta->Eval(PE);
+//    //return fGaussTimesBeta->Integral(fitMin-5*sig,fitMax+5*sig);
+//
+    
+    //better use GSL fancy integration
+    
+    TF1 fGaussTimesBeta("fGaussTimesBeta", GaussTimesBeta, xlow, xupp, 7);
+    fGaussTimesBeta.SetParameter(0,PE);
+    fGaussTimesBeta.SetParameter(1,Z);
+    fGaussTimesBeta.SetParameter(2,A);
+    fGaussTimesBeta.SetParameter(3,Q);
+    fGaussTimesBeta.SetParameter(4,N);
+    fGaussTimesBeta.SetParameter(5,LY);
+    fGaussTimesBeta.SetParameter(6,sig);
+    
+    ROOT::Math::GSLIntegrator ig( ROOT::Math::IntegrationOneDim::kADAPTIVE);
+
+    const ROOT::Math::WrappedTF1 wf(fGaussTimesBeta);
+    
+    ig.SetFunction(wf);
+    ig.SetRelTolerance(0.001);
+    
+    double conv = ig.Integral(xlow, xupp);
+    return N*conv;
+
+}
+
+double Kr83Peak(double* x, double* p){
+    double PE = x[0]; //returns in PHOTOELECTRONS
+
+    double KrAmp = p[0]; //photopeak amplitude
+    double KrCentroid = p[1];
+    double KrSigma = p[2];
+    
+    if (PE < 200 || PE > 450){
+        return 0;
+    }
+    
+    return KrAmp*TMath::Gaus(PE,KrCentroid,KrSigma, 1);
+    
+}
+
+double Ar39andKr83Spec(double* x, double* p)
+{
+    double PE = x[0]; //returns in PHOTOELECTRONS
+
+    //for the beta
+    double Z = p[0];
+    double A = p[1];
+    double Q = p[2];
+    
+    double N = p[3]; //overall amplitude of the beta
+    double LY = p[4]; //light yield (assume constant)
+    
+    double sig0 = p[5];
+    double sig1 = p[6];
+    double sig2 = p[7];
+    
+    //for the gamma
+    double KrAmp = p[8]; //photopeak amplitude
+    double KrCentroid = p[9];
+    double KrSigma = p[10];
+    
+    //flat overall background
+    //double BG = p[11];
+
+    
+    // Sum of background, beta and peak function
+    double sum = BetaSpecPdfRes(x, p) + Kr83Peak(x,&p[8]);
+                                                      
+    return sum;
+}
 
