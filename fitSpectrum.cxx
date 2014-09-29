@@ -34,13 +34,6 @@ void fitSpectrum(){
     double fitMax = 5000;
     double backgroundGuess = 0; //flat background spectrum
 
-    //-----Set up the Kr fit guesses
-    
-    //peak is at 41.5 keV.  looks here like 200-450 PE is fair, centered at 325
-    
-    double KrampGuess = 120000  ; //WITH the 1/sqrt(2pi)/sigma factor
-    double KrcentroidGuess = 325;
-    double KrsigmaGuess = 60/2.3548; //converting from FWHM
     
     //-----Set up the Beta Spectrum fit
 
@@ -50,11 +43,19 @@ void fitSpectrum(){
     double ArQ = 0.565; //in MeV
 
     double ArAmp = 1.5*pow(10, 4);
-    double ArLY = 8040.;
+    double ArLY = 8000.;
     
     double ArSig0 = 175;
     double ArSig1 = 0.4;
-    double ArSig2 = 0.2/ArLY;
+    double ArSig2 = 0.0435;
+    
+    //-----Set up the Kr fit guesses
+    
+    //peak is at 41.5 keV.  looks here like 200-450 PE is fair, centered at 325
+    
+    double KrampGuess = 1.1*pow(10, 5);  ; //WITH the 1/sqrt(2pi)/sigma factor
+    double KrcentroidGuess = 328;
+    double KrsigmaGuess = 24.2; //converting from FWHM
     
     
     TF1* fAr39andKr83Spec = new TF1("fAr39andKr83Spec", Ar39andKr83Spec, fitMin, fitMax, 12);
@@ -100,7 +101,7 @@ void fitSpectrum(){
     //-----Fit the sum
     //------------------------------------------------------------
     //hpx->Fit("fAr39andKr83Spec", "mern0");
-    hpx->Fit("fAr39andKr83Spec", "rVn0");
+    hpx->Fit("fAr39andKr83Spec", "mern0V");
 
     
     //Plot the fit result (redoing it explicitly because some funny business is happening w/ the hist color on load from .root file)
@@ -110,21 +111,22 @@ void fitSpectrum(){
     //TODO: this could be prettier...
     hpx->SetTitle("Fit to the ^{83}Kr Peak and ^{39}Ar Spectrum");
     hpx->GetXaxis()->SetTitle("PE");
-    //hpx->GetXaxis()->SetTitleSize(0.06);
-    hpx->GetXaxis()->SetRange(fitMin,fitMax);
+    hpx->GetXaxis()->SetRange(0,fitMax);
     hpx->GetYaxis()->SetTitle("Counts");
     //hpx->GetYaxis()->CenterTitle();
+    //hpx->GetXaxis()->SetTitleSize(0.06);
     //hpx->GetYaxis()->SetTitleSize(0.06);
     hpx->SetLineColor(kBlue);
     hpx->Draw();
     
     fAr39andKr83Spec->SetLineColor(kRed);
+    fAr39andKr83Spec->SetNpx(5000);
     fAr39andKr83Spec->Draw("same");
 //    
     c1->Update();
     
     c1->Print("spectrum.pdf");
-    
+    c1->Print("spectrum.root");
 }
 
 int main(){
