@@ -1,7 +1,5 @@
-//Trying to fit the whole beta spectrum with convolution for resolution
-//Constant light yield, no e field
-
-//B. Shanks, 9/26/14
+//Constant light yield, WITH e field
+//B. Shanks, 9/29/14
 
 #include "Riostream.h"
 #include <TROOT.h>

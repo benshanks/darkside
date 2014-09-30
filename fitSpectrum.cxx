@@ -1,4 +1,4 @@
-//Trying to fit the whole beta spectrum with convolution for resolution
+//Fits the beta spectrum with Kr peak fit separately.
 //Constant light yield, no e field
 
 //B. Shanks, 9/26/14
