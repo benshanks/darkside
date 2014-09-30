@@ -8,23 +8,14 @@
 #include "Math/GSLIntegrator.h"
 #include "Math/WrappedTF1.h"
 
-
-
-
 //copying some units from CLHEP in case this code is reused by someone without CLHEP
 static const double fine_structure_const = 1/137.035989;
 static const double electron_mass_c2 = 0.511;
 static const double pi = TMath::Pi();
 
-//don't ask.
-double fitMin = 200;
-double fitMax = 5000;
-
-
 //------------------------------------------------------------------
 //Math helpers
 //------------------------------------------------------------------
-
 
 //root apparently doesn't have any implementation of gamma for complex numbers.  Here are a few numerical implementations I had lying around.
 
@@ -233,7 +224,7 @@ double ForbiddenBetaSpecPEPdf(double PE, double Z, double A, double Q, double N,
 
 
 double ForbiddenBetaSpecPEPdf(double* x, double* p){
-    //in PE here.
+    //Convert forbidden beta spec to PE
     double PE = x[0]; //returns in PHOTOELECTRONS
     
     
@@ -247,6 +238,11 @@ double ForbiddenBetaSpecPEPdf(double* x, double* p){
     
     return N*ForbiddenBetaSpec(E,Z,A,Q);
 }
+
+//------------------------------------------------------------------
+// Convolving in resolution, adding in the Kr peak
+//------------------------------------------------------------------
+
 
 double GaussResSig( double *x, double *p )
 {
@@ -313,7 +309,7 @@ double BetaSpecPdfRes(double* x, double* p)
     //resolution function
     double sig = sqrt(sig0*sig0 + (1+sig1*sig1)*TMath::Max(PE, 0.)  + sig2*sig2*pow(TMath::Max(PE, 0.),2));
     
-    Double_t nSig = 3.; //number of sigma to convolve in
+    Double_t nSig = 5.; //number of sigma to convolve in
     Double_t xlow = PE - nSig*sig;
     Double_t xupp = PE + nSig*sig;
     
