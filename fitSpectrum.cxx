@@ -42,20 +42,20 @@ void fitSpectrum(){
     double ArA = 39;
     double ArQ = 0.565; //in MeV
 
-    double ArAmp = 1.5*pow(10, 4);
-    double ArLY = 8000.;
+    double ArAmp = 1.52*pow(10, 4);
+    double ArLY = 7900.;
     
-    double ArSig0 = 175;
+    double ArSig0 = 97.8;
     double ArSig1 = 0.4;
-    double ArSig2 = 0.0435;
+    double ArSig2 = 0.053;
     
     //-----Set up the Kr fit guesses
     
     //peak is at 41.5 keV.  looks here like 200-450 PE is fair, centered at 325
     
-    double KrampGuess = 1.1*pow(10, 5);  ; //WITH the 1/sqrt(2pi)/sigma factor
+    double KrampGuess = 1.09*pow(10, 5);  ; //WITH the 1/sqrt(2pi)/sigma factor
     double KrcentroidGuess = 328;
-    double KrsigmaGuess = 24.2; //converting from FWHM
+    double KrsigmaGuess = 23.8; //converting from FWHM
     
     
     TF1* fAr39andKr83Spec = new TF1("fAr39andKr83Spec", Ar39andKr83Spec, fitMin, fitMax, 12);
