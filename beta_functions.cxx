@@ -10,8 +10,10 @@
 
 //copying some units from CLHEP in case this code is reused by someone without CLHEP
 static const double fine_structure_const = 1/137.035989;
-static const double electron_mass_c2 = 0.511;
+static const double electron_mass_c2 = 0.511; //MeV
 static const double pi = TMath::Pi();
+
+static const double krPeakCentroidMeV = 0.0415;//MeV
 
 //------------------------------------------------------------------
 //Math helpers
@@ -217,9 +219,9 @@ double ForbiddenBetaSpec(double* E, double* Z, double* A, double* Q){
 }
 
 double ForbiddenBetaSpecPEPdf(double PE, double Z, double A, double Q, double N, double LY){
+    //converts from PE
     double E = PE /LY;
-    
-    return 1.*ForbiddenBetaSpec(E,Z,A,Q);
+    return N*ForbiddenBetaSpec(E,Z,A,Q);
 }
 
 
@@ -231,7 +233,7 @@ double ForbiddenBetaSpecPEPdf(double* x, double* p){
     double Z = p[0];
     double A = p[1];
     double Q = p[2];
-    double N = p[3]; //changes normalization
+    double N = p[3]; //changes normalization. does nothing right now.
     double LY = p[4]; //light yield parameter
     
     double E = PE /LY;
@@ -252,7 +254,7 @@ double GaussResSig( double *x, double *p )
     double sig1 = p[1];
     double sig2 = p[2];
     
-   return sqrt(sig0*sig0 + (1+sig1*sig1)*TMath::Max(PE, 0.)  + sig2*sig2*pow(TMath::Max(PE, 0.),2));
+   return sqrt(sig0*sig0 + (1.+sig1*sig1)*TMath::Max(PE, 0.)  + sig2*sig2* pow(TMath::Max(PE, 0.),2) );
 }
 
 
@@ -276,6 +278,8 @@ double GaussResSig( double *x, double *p )
 
 double GaussTimesBeta( double *x, double *p )
 {
+    //include here any noise contribution
+    
     double PE = p[0]; //this is the PE you're evaluating at
     
     double Z = p[1];
@@ -288,7 +292,9 @@ double GaussTimesBeta( double *x, double *p )
     
     double sig = p[6];
     
-    return ForbiddenBetaSpecPEPdf(t, Z,A,Q,N,LY) * TMath::Gaus(PE,t, sig, 1);
+    double bg = p[7];
+    //return TMath::Gaus(PE,t, sig, 1);
+    return (ForbiddenBetaSpecPEPdf(t, Z,A,Q,N,LY)+bg) * TMath::Gaus(PE,t, sig, 1);
 }
 
 double BetaSpecPdfRes(double* x, double* p)
@@ -306,50 +312,21 @@ double BetaSpecPdfRes(double* x, double* p)
     double sig1 = p[6];
     double sig2 = p[7];
     
+    double bg = p[8]; //flat background spectrum to add into convolution
+    
     //resolution function
-    double sig = sqrt(sig0*sig0 + (1+sig1*sig1)*TMath::Max(PE, 0.)  + sig2*sig2*pow(TMath::Max(PE, 0.),2));
+    //double sig = sqrt(sig0*sig0 + (1+sig1*sig1)*TMath::Max(PE, 0.)  + sig2*sig2*pow(TMath::Max(PE, 0.),2));
+    
+    
+    double sig = GaussResSig(x, &p[5]);
     
     Double_t nSig = 5.; //number of sigma to convolve in
     Double_t xlow = PE - nSig*sig;
     Double_t xupp = PE + nSig*sig;
     
-    //deprecated rough integration function
-
-//    Double_t np = 50.; //number of convolution steps
-//    Double_t step = (xupp-xlow) / np;
-//    
-//    Double_t sum = 0.0;
-//    Double_t xx;
-//    
-//    Double_t fBeta = 0.0;
-//    
-//    for(Double_t i=1.0; i<=np/2; i++) {
-//        xx = xlow + (i-.5) * step;
-//        fBeta = ForbiddenBetaSpecPEPdf(xx, Z,A,Q,N,LY);
-//        sum += fBeta * TMath::Gaus(x[0],xx,sig, 1);
-//        
-//        xx = xupp - (i-.5) * step;
-//        fBeta = ForbiddenBetaSpecPEPdf(xx, Z,A,Q,N,LY);
-//        sum += fBeta * TMath::Gaus(x[0],xx,sig,1);
-//    }
-//    
-//    Double_t invsq2pi = 0.3989422804014;   // (2 pi)^(-1/2)
-//    
-//    return N*(step * sum * invsq2pi / sig);
-    
-//    
-//    
-//    fGaussRes->SetRange(PE-5*sig,PE+5*sig);
-//    fForbBetaSpecPE->SetRange(0, Q*LY);
-//    fGaussTimesBeta->SetRange(0,Q*LY);
-//
-//    //return fGaussTimesBeta->Eval(PE);
-//    //return fGaussTimesBeta->Integral(fitMin-5*sig,fitMax+5*sig);
-//
-    
     //better use GSL fancy integration
     
-    TF1 fGaussTimesBeta("fGaussTimesBeta", GaussTimesBeta, xlow, xupp, 7);
+    TF1 fGaussTimesBeta("fGaussTimesBeta", GaussTimesBeta, xlow, xupp, 8);
     fGaussTimesBeta.SetParameter(0,PE);
     fGaussTimesBeta.SetParameter(1,Z);
     fGaussTimesBeta.SetParameter(2,A);
@@ -357,6 +334,7 @@ double BetaSpecPdfRes(double* x, double* p)
     fGaussTimesBeta.SetParameter(4,N);
     fGaussTimesBeta.SetParameter(5,LY);
     fGaussTimesBeta.SetParameter(6,sig);
+    fGaussTimesBeta.SetParameter(7,bg);
     
     ROOT::Math::GSLIntegrator ig( ROOT::Math::IntegrationOneDim::kADAPTIVE);
 
@@ -366,27 +344,50 @@ double BetaSpecPdfRes(double* x, double* p)
     ig.SetRelTolerance(0.001);
     
     double conv = ig.Integral(xlow, xupp);
-    return N*conv;
-
+    return conv;
 }
 
 double Kr83Peak(double* x, double* p){
+    //for an INDEPENDENT gaussian
     double PE = x[0]; //returns in PHOTOELECTRONS
-
-    double KrAmp = p[0]; //photopeak amplitude
-    double KrCentroid = p[1];
+   
+    double LY = p[0];
+    double KrAmp = p[1]; //photopeak amplitude
     double KrSigma = p[2];
     
-//    if (PE < 200 || PE > 500){
-//        return 0;
-//    }
+    double KrCentroid = LY*krPeakCentroidMeV;
     
     return KrAmp*TMath::Gaus(PE,KrCentroid,KrSigma, 1);
     
 }
 
+double Kr83PeakSharedSigma(double* x, double* p){
+    //for gaussian sigma tied to beta spectrum
+    
+    double PE = x[0]; //returns in PHOTOELECTRONS
+    
+    double LY = p[0];
+    double sig0 = p[1];
+    double sig1 = p[2];
+    double sig2 = p[3];
+    double KrAmp = p[4]; //photopeak amplitude
+    
+    double KrCentroid = LY*krPeakCentroidMeV;
+        
+    double sig = GaussResSig(x, &p[1]);
+    //can't use root to normalize the gaussian, because the sigma changes as a function of E.
+    //instead normalize to the sigma at median.
+    
+    double sigMedian = GaussResSig(&KrCentroid, &p[1]);
+    
+    return 1/sqrt(2*pi)/sigMedian * KrAmp*TMath::Gaus(PE,KrCentroid,sig, 0);
+    
+}
+
 double Ar39andKr83Spec(double* x, double* p)
 {
+    //ar beta and kr photopeak fit separately
+    
     double PE = x[0]; //returns in PHOTOELECTRONS
 
     //for the beta
@@ -400,19 +401,51 @@ double Ar39andKr83Spec(double* x, double* p)
     double sig0 = p[5];
     double sig1 = p[6];
     double sig2 = p[7];
+                  
+    //flat background
+    double bg = p[8]; //photopeak amplitude
     
     //for the gamma
-    double KrAmp = p[8]; //photopeak amplitude
-    double KrCentroid = p[9];
+    double KrAmp = p[9]; //photopeak amplitude
     double KrSigma = p[10];
     
-    //flat overall background
-    //double BG = p[11];
-
+    double krParam[3] = {LY, KrAmp, KrSigma};
     
-    // Sum of background, beta and peak function
-    double sum = BetaSpecPdfRes(x, p) + Kr83Peak(x,&p[8]);
+    // Sum of beta and peak function
+    double sum = BetaSpecPdfRes(x, p) + Kr83Peak(x, krParam);
                                                       
+    return sum;
+}
+
+double Ar39andKr83SpecCombined(double* x, double* p)
+{
+    //uses a shared sigma parameter for kr and argon
+    
+    double PE = x[0]; //returns in PHOTOELECTRONS
+    
+    //for the beta
+    double Z = p[0];
+    double A = p[1];
+    double Q = p[2];
+    
+    double N = p[3]; //overall amplitude of the beta
+    double LY = p[4]; //light yield (assume constant)
+    
+    double sig0 = p[5];
+    double sig1 = p[6];
+    double sig2 = p[7];
+                  
+    //flat background
+    double bg = p[8]; //photopeak amplitude
+    
+    //for the gamma
+    double KrAmp = p[9]; //photopeak amplitude
+    
+    double krParam[5] = {LY, sig0, sig1, sig2, KrAmp};
+    
+    // Sum of beta and peak function
+    double sum = BetaSpecPdfRes(x, p) + Kr83PeakSharedSigma(x,krParam);
+    
     return sum;
 }
 
